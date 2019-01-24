@@ -22,7 +22,7 @@ const STATUS_CODES = http.STATUS_CODES;
  * @return  Void
  */
 export default class Response {
-  constructor(body = null, opts = {}, timings = {}) {
+  constructor(body = null, opts = {}, timings = {}, extra = {}) {
     Body.call(this, body, opts);
 
     const status = opts.status || 200;
@@ -40,7 +40,8 @@ export default class Response {
       status,
       statusText: opts.statusText || STATUS_CODES[status],
       headers,
-      timings
+      timings,
+      extra
     };
   }
 
@@ -54,6 +55,10 @@ export default class Response {
 
   get status() {
     return this[INTERNALS].status;
+  }
+
+  get extra() {
+    return this[INTERNALS].extra;
   }
 
   /**

@@ -5,19 +5,18 @@
  *
  * All spec algorithm step numbers are based on https://fetch.spec.whatwg.org/commit-snapshots/ae716822cb3a61843226cd090eefc6589446c1d2/.
  */
-
-import Url from "url";
 import http from "http";
 import https from "https";
-import zlib from "zlib";
 import Stream from "stream";
+import Url from "url";
+import zlib from "zlib";
 
-import Body, { writeToStream, getTotalBytes } from "./body";
-import Response from "./response";
+import AbortError from "./abort-error";
+import Body, { getTotalBytes, writeToStream } from "./body";
+import FetchError from "./fetch-error";
 import Headers, { createHeadersLenient } from "./headers";
 import Request, { getNodeRequestOptions } from "./request";
-import FetchError from "./fetch-error";
-import AbortError from "./abort-error";
+import Response from "./response";
 
 // fix an issue where "PassThrough", "resolve" aren't a named export for node <10
 const PassThrough = Stream.PassThrough;
@@ -52,7 +51,9 @@ export default function fetch(url, opts) {
     const request = new Request(url, opts);
     const options = getNodeRequestOptions(request);
     const startAt = process.hrtime();
+
     const timings = {};
+    const extra = {};
 
     const resolve = value => {
       timings.totalTime = timeInMilis(process.hrtime(startAt));
@@ -136,7 +137,6 @@ export default function fetch(url, opts) {
 
     req.on("response", res => {
       clearTimeout(reqTimeout);
-
       const headers = createHeadersLenient(res.headers);
 
       // HTTP fetch step 5
@@ -202,12 +202,10 @@ export default function fetch(url, opts) {
               signal: request.signal
             };
 
+            const totalBytes = getTotalBytes(request);
+
             // HTTP-redirect fetch step 9
-            if (
-              res.statusCode !== 303 &&
-              request.body &&
-              getTotalBytes(request) === null
-            ) {
+            if (res.statusCode !== 303 && request.body && totalBytes === null) {
               reject(
                 new FetchError(
                   "Cannot follow redirect with body being a readable stream",
@@ -255,6 +253,10 @@ export default function fetch(url, opts) {
       // HTTP-network fetch step 12.1.1.3
       const codings = headers.get("Content-Encoding");
 
+      res.once("readable", () => {
+        timings.firstByteTime = timeInMilis(process.hrtime(startAt));
+      });
+
       // HTTP-network fetch step 12.1.1.4: handle content codings
 
       // in following scenarios we ignore compression support
@@ -270,14 +272,10 @@ export default function fetch(url, opts) {
         res.statusCode === 204 ||
         res.statusCode === 304
       ) {
-        response = new Response(body, response_options, timings);
+        response = new Response(body, response_options, timings, extra);
         resolve(response);
         return;
       }
-
-      res.once("readable", () => {
-        timings.firstByteTime = timeInMilis(process.hrtime(startAt));
-      });
 
       // For Node v6+
       // Be less strict when decoding compressed responses, since sometimes
@@ -292,7 +290,7 @@ export default function fetch(url, opts) {
       // for gzip
       if (codings == "gzip" || codings == "x-gzip") {
         body = body.pipe(zlib.createGunzip(zlibOptions));
-        response = new Response(body, response_options, timings);
+        response = new Response(body, response_options, timings, extra);
         resolve(response);
         return;
       }
@@ -309,14 +307,14 @@ export default function fetch(url, opts) {
           } else {
             body = body.pipe(zlib.createInflateRaw());
           }
-          response = new Response(body, response_options, timings);
+          response = new Response(body, response_options, timings, extra);
           resolve(response);
         });
         return;
       }
 
       // otherwise, use response as-is
-      response = new Response(body, response_options, timings);
+      response = new Response(body, response_options, timings, extra);
       resolve(response);
     });
 
