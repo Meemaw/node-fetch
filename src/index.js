@@ -66,6 +66,7 @@ export default function fetch(url, opts) {
 
     const abort = () => {
       let error = new AbortError("The user aborted a request.");
+      error.timings = timings;
       reject(error);
       if (request.body && request.body instanceof Stream.Readable) {
         request.body.destroy(error);
@@ -113,25 +114,25 @@ export default function fetch(url, opts) {
 
       if (request.timeout) {
         reqTimeout = setTimeout(() => {
-          reject(
-            new FetchError(
-              `network timeout at: ${request.url}`,
-              "request-timeout"
-            )
+          const fe = new FetchError(
+            `network timeout at: ${request.url}`,
+            "request-timeout"
           );
+          fe.timings = timings;
+          reject(fe);
           finalize();
         }, request.timeout);
       }
     });
 
     req.on("error", err => {
-      reject(
-        new FetchError(
-          `request to ${request.url} failed, reason: ${err.message}`,
-          "system",
-          err
-        )
+      const fe = new FetchError(
+        `request to ${request.url} failed, reason: ${err.message}`,
+        "system",
+        err
       );
+      fe.timings = timings;
+      reject(fe);
       finalize();
     });
 
@@ -151,12 +152,12 @@ export default function fetch(url, opts) {
         // HTTP fetch step 5.5
         switch (request.redirect) {
           case "error":
-            reject(
-              new FetchError(
-                `redirect mode is set to error: ${request.url}`,
-                "no-redirect"
-              )
+            const fe = new FetchError(
+              `redirect mode is set to error: ${request.url}`,
+              "no-redirect"
             );
+            fe.timings = timings;
+            reject(fe);
             finalize();
             return;
           case "manual":
@@ -167,6 +168,7 @@ export default function fetch(url, opts) {
                 headers.set("Location", locationURL);
               } catch (err) {
                 // istanbul ignore next: nodejs server prevent invalid response headers, we can't test this through normal request
+                err.timings = timings;
                 reject(err);
               }
             }
@@ -179,12 +181,12 @@ export default function fetch(url, opts) {
 
             // HTTP-redirect fetch step 5
             if (request.counter >= request.follow) {
-              reject(
-                new FetchError(
-                  `maximum redirect reached at: ${request.url}`,
-                  "max-redirect"
-                )
+              const fe = new FetchError(
+                `maximum redirect reached at: ${request.url}`,
+                "max-redirect"
               );
+              fe.timings = timings;
+              reject(fe);
               finalize();
               return;
             }
@@ -206,12 +208,12 @@ export default function fetch(url, opts) {
 
             // HTTP-redirect fetch step 9
             if (res.statusCode !== 303 && request.body && totalBytes === null) {
-              reject(
-                new FetchError(
-                  "Cannot follow redirect with body being a readable stream",
-                  "unsupported-redirect"
-                )
+              const fe = new FetchError(
+                "Cannot follow redirect with body being a readable stream",
+                "unsupported-redirect"
               );
+              fe.timings = timings;
+              reject(fe);
               finalize();
               return;
             }

@@ -19,12 +19,6 @@ const INTERNALS = Symbol("Body internals");
 // fix an issue where "PassThrough" isn't a named export for node <10
 const PassThrough = Stream.PassThrough;
 
-const NS_PER_SEC = 1e9;
-
-function timeInMilis(time) {
-  return ((time[0] * NS_PER_SEC + time[1]) / 1e6).toFixed(2);
-}
-
 /**
  * Body mixin
  *

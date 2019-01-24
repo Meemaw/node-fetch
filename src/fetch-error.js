@@ -1,4 +1,3 @@
-
 /**
  * fetch-error.js
  *
@@ -14,20 +13,20 @@
  * @return  FetchError
  */
 export default function FetchError(message, type, systemError) {
-	Error.call(this, message);
+  Error.call(this, message);
 
-	this.message = message;
-	this.type = type;
+  this.message = message;
+  this.type = type;
 
-	// when err.type is `system`, err.code contains system error code
-	if (systemError) {
-		this.code = this.errno = systemError.code;
-	}
+  // when err.type is `system`, err.code contains system error code
+  if (systemError) {
+    this.code = this.errno = systemError.code;
+  }
 
-	// hide custom error implementation details from end-users
-	Error.captureStackTrace(this, this.constructor);
+  // hide custom error implementation details from end-users
+  Error.captureStackTrace(this, this.constructor);
 }
 
 FetchError.prototype = Object.create(Error.prototype);
 FetchError.prototype.constructor = FetchError;
-FetchError.prototype.name = 'FetchError';
+FetchError.prototype.name = "FetchError";
