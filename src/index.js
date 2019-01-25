@@ -40,9 +40,50 @@ export default function fetch(url, opts) {
   Body.Promise = fetch.Promise;
 
   const NS_PER_SEC = 1e9;
+  const MS_PER_NS = 1e6;
 
-  function timeInMilis(time) {
-    return parseFloat(((time[0] * NS_PER_SEC + time[1]) / 1e6).toFixed(2));
+  function getDnsLookupTime(eventTimes) {
+    return eventTimes.dnsLookupAt !== undefined
+      ? getHrTimeDurationInMs(eventTimes.startAt, eventTimes.dnsLookupAt)
+      : undefined;
+  }
+
+  function getTcpConnectionTime(eventTimes) {
+    return getHrTimeDurationInMs(
+      eventTimes.dnsLookupAt || eventTimes.startAt,
+      eventTimes.tcpConnectionAt
+    );
+  }
+
+  function getTlsHandshakeTime(eventTimes) {
+    return eventTimes.tlsHandshakeAt !== undefined
+      ? getHrTimeDurationInMs(
+          eventTimes.tcpConnectionAt,
+          eventTimes.tlsHandshakeAt
+        )
+      : undefined;
+  }
+
+  function getFirstByteTime(eventTimes) {
+    return getHrTimeDurationInMs(
+      eventTimes.tlsHandshakeAt || eventTimes.tcpConnectionAt,
+      eventTimes.firstByteAt
+    );
+  }
+
+  function getTotalTime(eventTimes) {
+    return getHrTimeDurationInMs(eventTimes.startAt, eventTimes.endAt);
+  }
+
+  function getHrTimeDurationInMs(startTime, endTime) {
+    if (!startTime || !endTime) {
+      return undefined;
+    }
+    const secondDiff = endTime[0] - startTime[0];
+    const nanoSecondDiff = endTime[1] - startTime[1];
+    const diffInNanoSecond = secondDiff * NS_PER_SEC + nanoSecondDiff;
+
+    return diffInNanoSecond / MS_PER_NS;
   }
 
   // wrap http.request into fetch
@@ -50,13 +91,15 @@ export default function fetch(url, opts) {
     // build request object
     const request = new Request(url, opts);
     const options = getNodeRequestOptions(request);
-    const startAt = process.hrtime();
 
-    const timings = {};
-    const extra = {};
+    let timings = {};
+    const eventTimes = {
+      startAt: process.hrtime()
+    };
 
     const resolve = value => {
-      timings.totalTime = timeInMilis(process.hrtime(startAt));
+      eventTimes.endAt = process.hrtime();
+      timings.totalTime = getTotalTime(eventTimes);
       resolvePromise(value);
     };
 
@@ -101,15 +144,18 @@ export default function fetch(url, opts) {
 
     req.once("socket", socket => {
       socket.on("lookup", () => {
-        timings.dnsLookupTime = timeInMilis(process.hrtime(startAt));
+        eventTimes.dnsLookupAt = process.hrtime();
+        timings.dnsLookupTime = getDnsLookupTime(eventTimes);
       });
 
       socket.on("connect", () => {
-        timings.tcpConnectionTime = timeInMilis(process.hrtime(startAt));
+        eventTimes.tcpConnectionAt = process.hrtime();
+        timings.tcpConnectionTime = getTcpConnectionTime(eventTimes);
       });
 
       socket.on("secureConnect", () => {
-        timings.tlsHandshakeTime = timeInMilis(process.hrtime(startAt));
+        eventTimes.tlsHandshakeAt = process.hrtime();
+        timings.tlsHandshakeTime = getTlsHandshakeTime(eventTimes);
       });
 
       if (request.timeout) {
@@ -256,7 +302,8 @@ export default function fetch(url, opts) {
       const codings = headers.get("Content-Encoding");
 
       res.once("readable", () => {
-        timings.firstByteTime = timeInMilis(process.hrtime(startAt));
+        eventTimes.firstByteAt = process.hrtime();
+        timings.firstByteTime = getFirstByteTime(eventTimes);
       });
 
       // HTTP-network fetch step 12.1.1.4: handle content codings
@@ -274,7 +321,7 @@ export default function fetch(url, opts) {
         res.statusCode === 204 ||
         res.statusCode === 304
       ) {
-        response = new Response(body, response_options, timings, extra);
+        response = new Response(body, response_options, timings);
         resolve(response);
         return;
       }
@@ -292,7 +339,7 @@ export default function fetch(url, opts) {
       // for gzip
       if (codings == "gzip" || codings == "x-gzip") {
         body = body.pipe(zlib.createGunzip(zlibOptions));
-        response = new Response(body, response_options, timings, extra);
+        response = new Response(body, response_options, timings);
         resolve(response);
         return;
       }
@@ -309,14 +356,14 @@ export default function fetch(url, opts) {
           } else {
             body = body.pipe(zlib.createInflateRaw());
           }
-          response = new Response(body, response_options, timings, extra);
+          response = new Response(body, response_options, timings);
           resolve(response);
         });
         return;
       }
 
       // otherwise, use response as-is
-      response = new Response(body, response_options, timings, extra);
+      response = new Response(body, response_options, timings);
       resolve(response);
     });
 
