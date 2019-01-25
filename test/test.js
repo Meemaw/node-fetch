@@ -2868,7 +2868,7 @@ describe("external encoding", () => {
 				expect(res.timings.dnsLookupTime).to.be.at.least(0.5);
 				expect(res.timings.tcpConnectionTime).to.be.at.least(0.5);
 				expect(res.timings.tlsHandshakeTime).to.be.at.least(0.5);
-				expect(res.timings.totalTime).to.be.at.least(0.5);
+        expect(res.timings.totalTime).to.be.at.least(0.5);
         return res.blob().then(blob => {
 					expect(blob.size).to.equal(83)
           return expect(res.timings.firstByteTime).to.be.at.least(0.5);

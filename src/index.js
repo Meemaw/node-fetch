@@ -42,7 +42,7 @@ export default function fetch(url, opts) {
   const NS_PER_SEC = 1e9;
 
   function timeInMilis(time) {
-    return ((time[0] * NS_PER_SEC + time[1]) / 1e6).toFixed(2);
+    return parseFloat(((time[0] * NS_PER_SEC + time[1]) / 1e6).toFixed(2));
   }
 
   // wrap http.request into fetch
