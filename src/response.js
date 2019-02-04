@@ -40,8 +40,13 @@ export default class Response {
       status,
       statusText: opts.statusText || STATUS_CODES[status],
       headers,
-      timings
+      timings,
+      remoteAddress: opts.remoteAddress
     };
+  }
+
+  get remoteAddress() {
+    return this[INTERNALS].remoteAddress;
   }
 
   get timings() {
