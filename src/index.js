@@ -287,6 +287,7 @@ export default function fetch(url, opts) {
         if (signal) signal.removeEventListener("abort", abortAndFinalize);
       });
 
+      const ip = req.connection.remoteAddress;
       let body = res.pipe(new PassThrough());
 
       const response_options = {
@@ -295,7 +296,8 @@ export default function fetch(url, opts) {
         statusText: res.statusMessage,
         headers: headers,
         size: request.size,
-        timeout: request.timeout
+        timeout: request.timeout,
+        ip
       };
 
       // HTTP-network fetch step 12.1.1.3
